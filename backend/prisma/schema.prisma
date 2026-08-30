@@ -1,0 +1,246 @@
+// NudgePay backend — Prisma schema
+// Monetary values are stored as integers in minor units (cents) — never floats.
+// All tenant-owned tables carry organizationId and are always queried scoped to it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  DUE
+  OVERDUE
+  PAID
+  CANCELLED
+}
+
+enum ReminderEventStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLoginAt  DateTime?
+
+  memberships   OrganizationMember[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  timezone  String   @default("UTC")
+  currency  String   @default("USD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members           OrganizationMember[]
+  clients           Client[]
+  invoices          Invoice[]
+  reminderSequences ReminderSequence[]
+  emailTemplates    EmailTemplate[]
+  reminderEvents    ReminderEvent[]
+  auditLogs         AuditLog[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid())
+  organizationId String
+  userId         String
+  role           OrganizationRole @default(MEMBER)
+  createdAt      DateTime         @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_members")
+}
+
+// Refresh tokens are never stored in plaintext — only a SHA-256 hash of the
+// token is persisted. Rotation replaces a row's hash pointer so a reused
+// (stolen) refresh token can be detected and the whole chain revoked.
+model RefreshToken {
+  id                  String    @id @default(uuid())
+  userId              String
+  tokenHash           String    @unique
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  replacedByTokenHash String?
+  createdAt           DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Client {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  companyName    String?
+  email          String
+  phone          String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoices     Invoice[]
+
+  @@index([organizationId])
+  @@index([organizationId, email])
+  @@map("clients")
+}
+
+model Invoice {
+  id                 String        @id @default(uuid())
+  organizationId     String
+  clientId           String
+  reminderSequenceId String?
+  invoiceNumber      String
+  // Minor units (e.g. cents for USD).
+  amount             Int
+  currency           String        @default("USD")
+  issueDate          DateTime
+  dueDate            DateTime
+  paymentUrl         String?
+  status             InvoiceStatus @default(DRAFT)
+  paidAt             DateTime?
+  remindersPaused    Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client           Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  reminderSequence ReminderSequence? @relation(fields: [reminderSequenceId], references: [id], onDelete: SetNull)
+  reminderEvents   ReminderEvent[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+  @@map("invoices")
+}
+
+model ReminderSequence {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  steps        ReminderStep[]
+  invoices     Invoice[]
+
+  @@index([organizationId])
+  @@map("reminder_sequences")
+}
+
+model ReminderStep {
+  id                 String   @id @default(uuid())
+  reminderSequenceId String
+  stepOrder          Int
+  delayDays          Int
+  emailTemplateId    String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  reminderSequence ReminderSequence @relation(fields: [reminderSequenceId], references: [id], onDelete: Cascade)
+  emailTemplate    EmailTemplate    @relation(fields: [emailTemplateId], references: [id], onDelete: Restrict)
+  reminderEvents   ReminderEvent[]
+
+  @@unique([reminderSequenceId, stepOrder])
+  @@map("reminder_steps")
+}
+
+model EmailTemplate {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  subject        String
+  body           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reminderSteps ReminderStep[]
+
+  @@index([organizationId])
+  @@map("email_templates")
+}
+
+// One row per (invoice, step) — the unique constraint is the hard backstop
+// against ever sending the same reminder twice, even under concurrent workers.
+model ReminderEvent {
+  id                String              @id @default(uuid())
+  organizationId    String
+  invoiceId         String
+  reminderStepId    String
+  scheduledAt       DateTime
+  sentAt            DateTime?
+  status            ReminderEventStatus @default(PENDING)
+  attempts          Int                 @default(0)
+  providerMessageId String?
+  lastError         String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  reminderStep ReminderStep @relation(fields: [reminderStepId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, reminderStepId])
+  @@index([status, scheduledAt])
+  @@index([organizationId])
+  @@map("reminder_events")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
+}

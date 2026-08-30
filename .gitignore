@@ -1,0 +1,30 @@
+# Applies repo-wide (frontend/, backend/, and anywhere else) — patterns with
+# no leading slash match at any depth.
+
+# --- Dependencies ------------------------------------------------------
+node_modules/
+
+# --- Build output --------------------------------------------------------
+dist/
+build/
+.output/
+.vinxi/
+.nitro/
+.tanstack/
+*.tsbuildinfo
+
+# --- Env / secrets -------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- Logs & coverage -------------------------------------------------------
+*.log
+npm-debug.log*
+coverage/
+
+# --- Editor / OS -----------------------------------------------------------
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/

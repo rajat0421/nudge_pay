@@ -1,0 +1,14 @@
+# Optional — for running the API in a container against Supabase (e.g. to
+# mirror a production image locally). Not required for local development;
+# `npm run dev` against your Supabase DATABASE_URL works with no Docker at
+# all. There is deliberately no Postgres service here — Supabase is the only
+# database NudgePay talks to, in every environment.
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "4000:4000"
+    command: sh -c "npx prisma migrate deploy && node dist/server.js"
