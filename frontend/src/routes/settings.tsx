@@ -19,12 +19,12 @@ import { useAuthStore } from "@/store/authStore";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — Remindly" },
+      { title: "Settings — NudgePay" },
       {
         name: "description",
         content: "Manage your organization, sender identity for reminder emails, and plan.",
       },
-      { property: "og:title", content: "Settings — Remindly" },
+      { property: "og:title", content: "Settings — NudgePay" },
       { property: "og:description", content: "Organization, sender identity and plan settings." },
     ],
   }),
@@ -50,7 +50,7 @@ function SettingsPage() {
       <PageContainer className="max-w-3xl">
         <PageHeading
           title="Settings"
-          description="Reminder emails send from this identity — clients see it in their inbox, not Remindly."
+          description="Reminder emails send from this identity — clients see it in their inbox, not NudgePay."
         />
 
         <div className="space-y-6">

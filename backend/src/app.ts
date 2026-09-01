@@ -12,6 +12,7 @@ import { registerRequestId, generateRequestId } from "./middleware/request-id";
 import { registerGlobalRateLimit } from "./middleware/rate-limit";
 
 import { authRoutes } from "./modules/auth/auth.routes";
+import { organizationsRoutes } from "./modules/organizations/organizations.routes";
 import { clientsRoutes } from "./modules/clients/clients.routes";
 import { invoicesRoutes } from "./modules/invoices/invoices.routes";
 import { remindersRoutes } from "./modules/reminders/reminders.routes";
@@ -70,6 +71,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: `${API_PREFIX}/auth` });
+  await app.register(organizationsRoutes, { prefix: `${API_PREFIX}/organizations` });
   await app.register(clientsRoutes, { prefix: `${API_PREFIX}/clients` });
   await app.register(invoicesRoutes, { prefix: `${API_PREFIX}/invoices` });
   await app.register(remindersRoutes, { prefix: `${API_PREFIX}/reminder-sequences` });

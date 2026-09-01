@@ -14,8 +14,11 @@ import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AutomationsRouteImport } from './routes/automations'
 import { Route as CustomersRouteImport } from './routes/customers'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as InvoicesIndexRouteImport } from './routes/invoices.index'
 import { Route as InvoicesInvoiceIdRouteImport } from './routes/invoices.$invoiceId'
 import { Route as InvoicesNewRouteImport } from './routes/invoices.new'
@@ -45,14 +48,29 @@ const CustomersRoute = CustomersRouteImport.update({
   path: '/customers',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InvoicesIndexRoute = InvoicesIndexRouteImport.update({
@@ -77,8 +95,11 @@ export interface FileRoutesByFullPath {
   '/analytics': typeof AnalyticsRoute
   '/automations': typeof AutomationsRoute
   '/customers': typeof CustomersRoute
+  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/invoices/new': typeof InvoicesNewRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -89,8 +110,11 @@ export interface FileRoutesByTo {
   '/analytics': typeof AnalyticsRoute
   '/automations': typeof AutomationsRoute
   '/customers': typeof CustomersRoute
+  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/invoices/new': typeof InvoicesNewRoute
   '/invoices': typeof InvoicesIndexRoute
@@ -102,8 +126,11 @@ export interface FileRoutesById {
   '/analytics': typeof AnalyticsRoute
   '/automations': typeof AutomationsRoute
   '/customers': typeof CustomersRoute
+  '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
   '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
   '/invoices/$invoiceId': typeof InvoicesInvoiceIdRoute
   '/invoices/new': typeof InvoicesNewRoute
   '/invoices/': typeof InvoicesIndexRoute
@@ -116,8 +143,11 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/automations'
     | '/customers'
+    | '/dashboard'
     | '/login'
+    | '/onboarding'
     | '/settings'
+    | '/signup'
     | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/invoices/'
@@ -128,8 +158,11 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/automations'
     | '/customers'
+    | '/dashboard'
     | '/login'
+    | '/onboarding'
     | '/settings'
+    | '/signup'
     | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/invoices'
@@ -140,8 +173,11 @@ export interface FileRouteTypes {
     | '/analytics'
     | '/automations'
     | '/customers'
+    | '/dashboard'
     | '/login'
+    | '/onboarding'
     | '/settings'
+    | '/signup'
     | '/invoices/$invoiceId'
     | '/invoices/new'
     | '/invoices/'
@@ -153,8 +189,11 @@ export interface RootRouteChildren {
   AnalyticsRoute: typeof AnalyticsRoute
   AutomationsRoute: typeof AutomationsRoute
   CustomersRoute: typeof CustomersRoute
+  DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
+  OnboardingRoute: typeof OnboardingRoute
   SettingsRoute: typeof SettingsRoute
+  SignupRoute: typeof SignupRoute
   InvoicesInvoiceIdRoute: typeof InvoicesInvoiceIdRoute
   InvoicesNewRoute: typeof InvoicesNewRoute
   InvoicesIndexRoute: typeof InvoicesIndexRoute
@@ -197,6 +236,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CustomersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -204,11 +250,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/invoices/': {
@@ -241,8 +301,11 @@ const rootRouteChildren: RootRouteChildren = {
   AnalyticsRoute: AnalyticsRoute,
   AutomationsRoute: AutomationsRoute,
   CustomersRoute: CustomersRoute,
+  DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
+  OnboardingRoute: OnboardingRoute,
   SettingsRoute: SettingsRoute,
+  SignupRoute: SignupRoute,
   InvoicesInvoiceIdRoute: InvoicesInvoiceIdRoute,
   InvoicesNewRoute: InvoicesNewRoute,
   InvoicesIndexRoute: InvoicesIndexRoute,

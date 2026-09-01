@@ -1,4 +1,4 @@
-export const APP_NAME = "Remindly";
+export const APP_NAME = "NudgePay";
 export const APP_TAGLINE = "Stop chasing overdue invoices";
 
 export const INVOICE_STATUS_LABELS = {

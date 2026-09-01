@@ -105,9 +105,8 @@ on the API service if you do, so the two don't double-process the same queue.
 
 - Node.js 20+
 - A [Supabase](https://supabase.com) project — **the only database NudgePay
-  uses, in every environment.** There is no local Postgres to install or run;
-  `docker-compose.yml` in this repo is only for optionally containerizing the
-  API itself, not the database.
+  uses, in every environment.** There is no local Postgres to install or run,
+  and no Docker involved anywhere in this project.
 
 ## Supabase setup
 

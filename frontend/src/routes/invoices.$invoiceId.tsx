@@ -14,13 +14,13 @@ import { useInvoiceStore } from "@/store/invoiceStore";
 export const Route = createFileRoute("/invoices/$invoiceId")({
   head: () => ({
     meta: [
-      { title: "Invoice detail — Remindly" },
+      { title: "Invoice detail — NudgePay" },
       {
         name: "description",
         content:
           "Review one invoice: amount, due date, payment link and the full timeline of reminders sent or scheduled.",
       },
-      { property: "og:title", content: "Invoice detail — Remindly" },
+      { property: "og:title", content: "Invoice detail — NudgePay" },
       {
         property: "og:description",
         content: "Invoice summary with its complete reminder timeline.",

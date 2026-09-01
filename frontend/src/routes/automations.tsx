@@ -8,12 +8,12 @@ import { useAutomationStore } from "@/store/automationStore";
 export const Route = createFileRoute("/automations")({
   head: () => ({
     meta: [
-      { title: "Automations — Remindly" },
+      { title: "Automations — NudgePay" },
       {
         name: "description",
         content: "Reminder sequences that chase overdue invoices automatically — edit steps or pause them per client type.",
       },
-      { property: "og:title", content: "Automations — Remindly" },
+      { property: "og:title", content: "Automations — NudgePay" },
       {
         property: "og:description",
         content: "Every automated reminder sequence and how much it has recovered.",

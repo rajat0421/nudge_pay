@@ -10,7 +10,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
+import { useAuthStore } from "../store/authStore";
 
 function NotFoundComponent() {
   return (
@@ -37,9 +37,6 @@ function NotFoundComponent() {
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -77,14 +74,19 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "NudgePay" },
+      {
+        name: "description",
+        content: "NudgePay automatically follows up on overdue invoices so you don't have to.",
+      },
+      { name: "author", content: "NudgePay" },
+      { property: "og:title", content: "NudgePay" },
+      {
+        property: "og:description",
+        content: "NudgePay automatically follows up on overdue invoices so you don't have to.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
@@ -116,6 +118,18 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    // Client-only: the persisted auth session lives in localStorage, which
+    // doesn't exist during this route's server-side render. `.finally` (not
+    // a hydration-finished listener) is used deliberately — it must flip
+    // isHydrated even if the stored value is corrupted/unparseable and
+    // rehydrate() rejects, or every auth-gated page would hang forever.
+    const result = useAuthStore.persist.rehydrate();
+    Promise.resolve(result).finally(() => {
+      useAuthStore.setState({ isHydrated: true });
+    });
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

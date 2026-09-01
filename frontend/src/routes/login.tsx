@@ -1,6 +1,7 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,7 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: `Sign in — ${APP_NAME}` },
-      { name: "description", content: "Sign in to Remindly to manage invoices and reminder automations." },
+      { name: "description", content: "Sign in to NudgePay to manage invoices and reminder automations." },
       { property: "og:title", content: `Sign in — ${APP_NAME}` },
       { property: "og:description", content: "Sign in to manage invoices and reminder automations." },
     ],
@@ -21,26 +22,33 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const signIn = useAuthStore((s) => s.signIn);
+  const login = useAuthStore((s) => s.login);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    signIn(email);
-    toast.success("Signed in");
-    navigate({ to: "/" });
+    try {
+      await login({ email, password });
+      toast.success("Signed in");
+      navigate({ to: "/dashboard" });
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Couldn't reach the server";
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="grid min-h-screen place-items-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center text-center">
-          <span className="grid size-10 place-items-center rounded-lg bg-primary font-display text-base font-bold text-primary-foreground">
-            R
-          </span>
+          <Link to="/" className="grid size-10 place-items-center rounded-lg bg-primary font-display text-base font-bold text-primary-foreground">
+            N
+          </Link>
           <h1 className="mt-4 font-display text-2xl font-semibold tracking-tight">{APP_NAME}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{APP_TAGLINE}</p>
         </div>
@@ -72,12 +80,15 @@ function LoginPage() {
             />
           </div>
           <Button type="submit" className="w-full" disabled={isSubmitting}>
-            Sign in
+            {isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          This is a prototype — any email and password will sign you in.
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          Don't have an account?{" "}
+          <Link to="/signup" className="font-medium text-primary hover:underline">
+            Start free
+          </Link>
         </p>
       </div>
     </div>

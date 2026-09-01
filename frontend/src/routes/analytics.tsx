@@ -11,12 +11,12 @@ import { automations, customers, monthlyStats } from "@/lib/mock-db";
 export const Route = createFileRoute("/analytics")({
   head: () => ({
     meta: [
-      { title: "Analytics — Remindly" },
+      { title: "Analytics — NudgePay" },
       {
         name: "description",
         content: "Outstanding vs. collected trends and how much automated reminders have recovered.",
       },
-      { property: "og:title", content: "Analytics — Remindly" },
+      { property: "og:title", content: "Analytics — NudgePay" },
       { property: "og:description", content: "Collections trend and reminder recovery totals." },
     ],
   }),

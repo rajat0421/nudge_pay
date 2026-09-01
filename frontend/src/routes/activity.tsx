@@ -16,13 +16,13 @@ import { activity, type ActivityItem } from "@/lib/mock-db";
 export const Route = createFileRoute("/activity")({
   head: () => ({
     meta: [
-      { title: "Activity — Remindly" },
+      { title: "Activity — NudgePay" },
       {
         name: "description",
         content: "Every reminder sent, invoice marked paid and automation change, in one timeline.",
       },
-      { property: "og:title", content: "Activity — Remindly" },
-      { property: "og:description", content: "A full timeline of everything Remindly has done." },
+      { property: "og:title", content: "Activity — NudgePay" },
+      { property: "og:description", content: "A full timeline of everything NudgePay has done." },
     ],
   }),
   component: ActivityPage,

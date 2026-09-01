@@ -22,13 +22,13 @@ import { useInvoiceStore } from "@/store/invoiceStore";
 export const Route = createFileRoute("/invoices/new")({
   head: () => ({
     meta: [
-      { title: "New invoice — Remindly" },
+      { title: "New invoice — NudgePay" },
       {
         name: "description",
         content:
           "Add an invoice with its client, amount, due date and payment link, then attach a reminder sequence.",
       },
-      { property: "og:title", content: "New invoice — Remindly" },
+      { property: "og:title", content: "New invoice — NudgePay" },
       {
         property: "og:description",
         content: "Create an invoice and attach an automated reminder sequence.",
@@ -101,7 +101,7 @@ function NewInvoicePage() {
       <PageContainer className="max-w-3xl">
         <PageHeading
           title="New invoice"
-          description="Remindly doesn't issue invoices — it tracks the ones you already sent and chases them."
+          description="NudgePay doesn't issue invoices — it tracks the ones you already sent and chases them."
         />
 
         <form onSubmit={onSubmit} className="space-y-6 rounded-xl border border-border bg-card p-6">

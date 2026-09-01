@@ -18,13 +18,13 @@ import type { InvoiceStatus } from "@/types/invoice";
 export const Route = createFileRoute("/invoices/")({
   head: () => ({
     meta: [
-      { title: "Invoices — Remindly" },
+      { title: "Invoices — NudgePay" },
       {
         name: "description",
         content:
           "Filter every invoice by status, search by client, and see how many reminders each one has triggered.",
       },
-      { property: "og:title", content: "Invoices — Remindly" },
+      { property: "og:title", content: "Invoices — NudgePay" },
       {
         property: "og:description",
         content: "Filter, search and track reminder progress on every invoice.",

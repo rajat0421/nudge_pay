@@ -15,7 +15,7 @@ import { useAppStore } from "@/store/appStore";
 import { useAuthStore } from "@/store/authStore";
 
 const nav = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/invoices", label: "Invoices", icon: FileText },
   { to: "/automations", label: "Automations", icon: Workflow },
   { to: "/customers", label: "Customers", icon: Users },
@@ -44,9 +44,9 @@ export function Sidebar() {
         )}
       >
         <div className="mb-8 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
+          <Link to="/dashboard" className="flex items-center gap-2.5">
             <span className="grid size-8 place-items-center rounded-lg bg-sidebar-primary font-display text-sm font-bold text-sidebar-primary-foreground">
-              R
+              N
             </span>
             <span className="font-display text-lg font-semibold tracking-tight">{APP_NAME}</span>
           </Link>
@@ -65,7 +65,7 @@ export function Sidebar() {
               key={to}
               to={to}
               onClick={() => setSidebarOpen(false)}
-              activeOptions={{ exact: to === "/" }}
+              activeOptions={{ exact: to === "/dashboard" }}
               className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               activeProps={{
                 className: "bg-sidebar-accent text-sidebar-accent-foreground",

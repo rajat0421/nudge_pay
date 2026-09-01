@@ -16,7 +16,7 @@ import { useAuthStore } from "@/store/authStore";
 export function Header({ title }: { title: string }) {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const user = useAuthStore((s) => s.user);
-  const signOut = useAuthStore((s) => s.signOut);
+  const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
 
   return (
@@ -52,7 +52,7 @@ export function Header({ title }: { title: string }) {
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
-                signOut();
+                logout();
                 navigate({ to: "/login" });
               }}
             >

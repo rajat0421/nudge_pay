@@ -12,12 +12,12 @@ import { useCustomerStore } from "@/store/customerStore";
 export const Route = createFileRoute("/customers")({
   head: () => ({
     meta: [
-      { title: "Clients — Remindly" },
+      { title: "Clients — NudgePay" },
       {
         name: "description",
         content: "Every client you invoice, how much they owe and how fast they typically pay.",
       },
-      { property: "og:title", content: "Clients — Remindly" },
+      { property: "og:title", content: "Clients — NudgePay" },
       {
         property: "og:description",
         content: "Outstanding balances and payment speed for every client.",
