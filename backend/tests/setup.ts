@@ -1,11 +1,10 @@
 import "dotenv/config";
-import { afterAll, beforeAll } from "vitest";
-import { prisma } from "../src/db/prisma";
+import { beforeAll } from "vitest";
 import { resetDatabase } from "./helpers/db";
 
 if (process.env.NODE_ENV !== "test") {
   throw new Error(
-    "Tests must run with NODE_ENV=test against a dedicated test database — refusing to run against a non-test DATABASE_URL.",
+    "Tests must run with NODE_ENV=test against a dedicated test database — refusing to run against a non-test SUPABASE_URL.",
   );
 }
 
@@ -16,8 +15,4 @@ if (process.env.NODE_ENV !== "test") {
 // isolation from each other beyond starting from a clean, empty database.
 beforeAll(async () => {
   await resetDatabase();
-});
-
-afterAll(async () => {
-  await prisma.$disconnect();
 });

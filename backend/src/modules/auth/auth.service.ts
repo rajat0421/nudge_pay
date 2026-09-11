@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import type { OrganizationRole } from "@prisma/client";
+import type { OrganizationRole } from "../../db/mappers";
 import { env } from "../../config/env";
 import { parseDurationToMs } from "../../utils/duration";
 import { hashPassword, verifyPassword, generateOpaqueToken, sha256 } from "../../utils/crypto";
@@ -65,7 +65,7 @@ export async function register(input: RegisterInput) {
   }
 
   const passwordHash = await hashPassword(input.password);
-  const { user, organization, membership } = await authRepository.createUserWithOrganization({
+  const { user, organization } = await authRepository.createUserWithOrganization({
     email: input.email,
     passwordHash,
     firstName: input.firstName,
@@ -73,7 +73,8 @@ export async function register(input: RegisterInput) {
     organizationName: input.organizationName,
   });
 
-  const tokens = await issueTokenPair(user.id, organization.id, membership.role);
+  // Registration always creates exactly one membership, as OWNER.
+  const tokens = await issueTokenPair(user.id, organization.id, "OWNER");
 
   await recordAuditLog({
     organizationId: organization.id,

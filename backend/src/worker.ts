@@ -5,7 +5,7 @@
  * process doesn't also run the jobs and double-process the same queue.
  */
 import { logger } from "./config/logger";
-import { assertDatabaseConnection, prisma } from "./db/prisma";
+import { assertDatabaseConnection } from "./db/supabase";
 import { startJobRunner, stopJobRunner } from "./jobs/runner";
 
 async function main(): Promise<void> {
@@ -17,7 +17,6 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string): Promise<void> => {
     logger.info({ signal }, "worker shutting down");
     stopJobRunner();
-    await prisma.$disconnect();
     process.exit(0);
   };
 

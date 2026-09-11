@@ -42,8 +42,23 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.setSerializerCompiler(serializerCompiler);
 
   await app.register(helmet, { global: true });
+  const allowedOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim());
+  const isLocalhostOrigin = (origin: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
   await app.register(cors, {
-    origin: env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
+    origin: isProduction
+      ? allowedOrigins
+      : (origin, callback) => {
+          // Local dev tooling (e.g. the frontend's Vite wrapper) can pick a
+          // different port each run — trust any localhost origin in
+          // development rather than CORS_ORIGIN's fixed port breaking every
+          // time that happens. Production still uses the strict allowlist.
+          if (!origin || allowedOrigins.includes(origin) || isLocalhostOrigin(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error("Not allowed by CORS"), false);
+          }
+        },
     credentials: true,
   });
   await registerGlobalRateLimit(app);

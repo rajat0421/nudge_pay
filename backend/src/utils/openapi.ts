@@ -2,9 +2,9 @@ import { z } from "zod";
 
 /**
  * Wraps a data schema in the API's standard `{ success, data }` envelope for
- * Swagger documentation. Deliberately permissive on nested shapes (Prisma
- * models carry Date/Decimal fields that are awkward to mirror exactly in
- * zod) — the envelope's top-level shape is what callers can rely on.
+ * Swagger documentation. Deliberately permissive on nested shapes (row
+ * objects carry Date fields that are awkward to mirror exactly in zod) —
+ * the envelope's top-level shape is what callers can rely on.
  */
 export function successEnvelope<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({ success: z.literal(true), data: dataSchema });

@@ -1,6 +1,17 @@
-import { prisma } from "../db/prisma";
+import { supabase, unwrap, unwrapVoid } from "../db/supabase";
 import { logger } from "../config/logger";
 import { computeTimeBasedStatus } from "../modules/invoices/invoices.status";
+
+interface OrgTimezone {
+  id: string;
+  timezone: string;
+}
+
+interface InvoiceStatusRow {
+  id: string;
+  dueDate: string;
+  status: string;
+}
 
 /**
  * Invoice statuses are date-driven (SENT -> DUE -> OVERDUE) rather than
@@ -10,24 +21,29 @@ import { computeTimeBasedStatus } from "../modules/invoices/invoices.status";
  * non-draft invoice per organization, in that organization's own timezone.
  */
 export async function syncInvoiceStatuses(): Promise<{ checked: number; updated: number }> {
-  const organizations = await prisma.organization.findMany({
-    select: { id: true, timezone: true },
-  });
+  const organizations = unwrap<OrgTimezone[]>(
+    await supabase.from("organizations").select("id, timezone"),
+  );
 
   let checked = 0;
   let updated = 0;
 
-  for (const organization of organizations) {
-    const invoices = await prisma.invoice.findMany({
-      where: { organizationId: organization.id, status: { in: ["SENT", "DUE", "OVERDUE"] } },
-      select: { id: true, dueDate: true, status: true },
-    });
+  for (const organization of organizations ?? []) {
+    const invoices = unwrap<InvoiceStatusRow[]>(
+      await supabase
+        .from("invoices")
+        .select("id, dueDate, status")
+        .eq("organizationId", organization.id)
+        .in("status", ["SENT", "DUE", "OVERDUE"]),
+    );
 
-    for (const invoice of invoices) {
+    for (const invoice of invoices ?? []) {
       checked += 1;
-      const nextStatus = computeTimeBasedStatus(invoice.dueDate, organization.timezone);
+      const nextStatus = computeTimeBasedStatus(new Date(invoice.dueDate), organization.timezone);
       if (nextStatus !== invoice.status) {
-        await prisma.invoice.update({ where: { id: invoice.id }, data: { status: nextStatus } });
+        unwrapVoid(
+          await supabase.from("invoices").update({ status: nextStatus }).eq("id", invoice.id),
+        );
         updated += 1;
       }
     }

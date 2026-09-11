@@ -1,4 +1,4 @@
-import type { OrganizationRole } from "@prisma/client";
+import type { OrganizationRole } from "../../db/mappers";
 
 export interface AccessTokenPayload {
   sub: string;

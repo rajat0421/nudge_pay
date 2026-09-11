@@ -125,18 +125,14 @@ export async function updateInvoice(
   }
 
   await invoicesRepository.updateInvoice(organizationId, id, {
-    ...(input.clientId && { client: { connect: { id: input.clientId } } }),
+    ...(input.clientId && { clientId: input.clientId }),
     ...(input.invoiceNumber && { invoiceNumber: input.invoiceNumber }),
     ...(input.amount !== undefined && { amount: majorToMinorUnits(input.amount) }),
     ...(input.currency && { currency: input.currency }),
     ...(input.issueDate && { issueDate: toCalendarDate(input.issueDate) }),
     ...(input.dueDate && { dueDate: nextDueDate }),
     ...(input.paymentUrl !== undefined && { paymentUrl: input.paymentUrl || null }),
-    ...(input.reminderSequenceId !== undefined && {
-      reminderSequence: input.reminderSequenceId
-        ? { connect: { id: input.reminderSequenceId } }
-        : { disconnect: true },
-    }),
+    ...(input.reminderSequenceId !== undefined && { reminderSequenceId: input.reminderSequenceId }),
     status: nextStatus,
   });
 

@@ -1,4 +1,4 @@
-import { prisma } from "../../db/prisma";
+import { supabase } from "../../db/supabase";
 import { logger } from "../../config/logger";
 
 export interface RecordAuditLogInput {
@@ -16,18 +16,16 @@ export interface RecordAuditLogInput {
  * user-facing request that triggered it.
  */
 export async function recordAuditLog(input: RecordAuditLogInput): Promise<void> {
-  try {
-    await prisma.auditLog.create({
-      data: {
-        organizationId: input.organizationId,
-        userId: input.userId ?? null,
-        action: input.action,
-        entityType: input.entityType,
-        entityId: input.entityId,
-        metadata: input.metadata ?? undefined,
-      },
-    });
-  } catch (error) {
+  const { error } = await supabase.from("audit_logs").insert({
+    organizationId: input.organizationId,
+    userId: input.userId ?? null,
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    metadata: input.metadata ?? null,
+  });
+
+  if (error) {
     logger.warn({ err: error, action: input.action }, "failed to write audit log");
   }
 }

@@ -1,3 +1,3 @@
-import type { Organization } from "@prisma/client";
+import type { OrganizationRow } from "../../db/mappers";
 
-export type { Organization };
+export type Organization = OrganizationRow;

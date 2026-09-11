@@ -5,7 +5,12 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
 
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  // The app's only database access is through @supabase/supabase-js over
+  // HTTPS — there is no direct Postgres connection at runtime. (DIRECT_URL,
+  // used only by `npm run db:migrate`'s standalone script, is deliberately
+  // NOT part of this schema — the running app never reads it.)
+  SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, "SUPABASE_SERVICE_ROLE_KEY is required"),
 
   JWT_ACCESS_SECRET: z.string().min(16, "JWT_ACCESS_SECRET must be at least 16 characters"),
   JWT_REFRESH_SECRET: z.string().min(16, "JWT_REFRESH_SECRET must be at least 16 characters"),

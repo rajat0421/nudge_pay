@@ -1,4 +1,4 @@
-import type { InvoiceStatus } from "@prisma/client";
+import type { InvoiceStatus } from "../../db/mappers";
 import { addCalendarDays, isCalendarDatePastInOrgTimezone } from "../../utils/dates";
 
 const DUE_SOON_WINDOW_DAYS = 3;

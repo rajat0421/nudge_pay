@@ -1,6 +1,6 @@
 import { buildApp } from "./app";
 import { env } from "./config/env";
-import { assertDatabaseConnection, prisma } from "./db/prisma";
+import { assertDatabaseConnection } from "./db/supabase";
 import { startJobRunner, stopJobRunner } from "./jobs/runner";
 
 async function main(): Promise<void> {
@@ -20,7 +20,6 @@ async function main(): Promise<void> {
     app.log.info({ signal }, "shutting down");
     stopJobRunner();
     await app.close();
-    await prisma.$disconnect();
     process.exit(0);
   };
 
@@ -29,7 +28,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error("Fatal startup error:", error);
   process.exit(1);
 });

@@ -1,5 +1,5 @@
 import "fastify";
-import type { OrganizationRole } from "@prisma/client";
+import type { OrganizationRole } from "../db/mappers";
 
 export interface AuthenticatedUser {
   userId: string;

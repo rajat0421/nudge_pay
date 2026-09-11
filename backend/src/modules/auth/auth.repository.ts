@@ -1,11 +1,27 @@
-import { prisma } from "../../db/prisma";
+import { supabase, unwrap, unwrapVoid, type Row } from "../../db/supabase";
+import {
+  mapOrganization,
+  mapOrganizationMember,
+  mapRefreshToken,
+  mapUser,
+  type OrganizationMemberRow,
+  type OrganizationRow,
+  type RefreshTokenRow,
+  type UserRow,
+} from "../../db/mappers";
 
-export function findUserByEmail(email: string) {
-  return prisma.user.findUnique({ where: { email } });
+export async function findUserByEmail(email: string): Promise<UserRow | null> {
+  const row = unwrap<Row | null>(
+    await supabase.from("users").select("*").eq("email", email).maybeSingle(),
+  );
+  return row && mapUser(row);
 }
 
-export function findUserById(id: string) {
-  return prisma.user.findUnique({ where: { id } });
+export async function findUserById(id: string): Promise<UserRow | null> {
+  const row = unwrap<Row | null>(
+    await supabase.from("users").select("*").eq("id", id).maybeSingle(),
+  );
+  return row && mapUser(row);
 }
 
 export interface CreateUserWithOrganizationInput {
@@ -17,56 +33,60 @@ export interface CreateUserWithOrganizationInput {
 }
 
 /** Registration is one atomic operation: user + organization + OWNER membership. */
-export function createUserWithOrganization(input: CreateUserWithOrganizationInput) {
-  return prisma.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        email: input.email,
-        passwordHash: input.passwordHash,
-        firstName: input.firstName,
-        lastName: input.lastName,
-      },
-    });
-
-    const organization = await tx.organization.create({
-      data: { name: input.organizationName },
-    });
-
-    const membership = await tx.organizationMember.create({
-      data: {
-        userId: user.id,
-        organizationId: organization.id,
-        role: "OWNER",
-      },
-    });
-
-    return { user, organization, membership };
-  });
+export async function createUserWithOrganization(
+  input: CreateUserWithOrganizationInput,
+): Promise<{ user: UserRow; organization: OrganizationRow }> {
+  const result = unwrap<{ user: Row; organization: Row }>(
+    await supabase.rpc("register_user_with_organization", {
+      p_email: input.email,
+      p_password_hash: input.passwordHash,
+      p_first_name: input.firstName,
+      p_last_name: input.lastName,
+      p_organization_name: input.organizationName,
+    }),
+  );
+  return { user: mapUser(result.user), organization: mapOrganization(result.organization) };
 }
 
-export function touchLastLogin(userId: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { lastLoginAt: new Date() },
-  });
+export async function touchLastLogin(userId: string): Promise<void> {
+  unwrapVoid(
+    await supabase.from("users").update({ lastLoginAt: new Date().toISOString() }).eq("id", userId),
+  );
 }
 
 /**
  * V1 has no organization-switching UI, so a user's "active" organization is
  * simply the first one they joined. See auth.service.ts for the rationale.
  */
-export function getPrimaryMembership(userId: string) {
-  return prisma.organizationMember.findFirst({
-    where: { userId },
-    orderBy: { createdAt: "asc" },
-    include: { organization: true },
-  });
+export async function getPrimaryMembership(
+  userId: string,
+): Promise<(OrganizationMemberRow & { organization: OrganizationRow }) | null> {
+  const row = unwrap<(Row & { organization: Row }) | null>(
+    await supabase
+      .from("organization_members")
+      .select("*, organization:organizations(*)")
+      .eq("userId", userId)
+      .order("createdAt", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  );
+  if (!row) return null;
+  return { ...mapOrganizationMember(row), organization: mapOrganization(row.organization) };
 }
 
-export function getMembership(userId: string, organizationId: string) {
-  return prisma.organizationMember.findUnique({
-    where: { organizationId_userId: { organizationId, userId } },
-  });
+export async function getMembership(
+  userId: string,
+  organizationId: string,
+): Promise<OrganizationMemberRow | null> {
+  const row = unwrap<Row | null>(
+    await supabase
+      .from("organization_members")
+      .select("*")
+      .eq("userId", userId)
+      .eq("organizationId", organizationId)
+      .maybeSingle(),
+  );
+  return row && mapOrganizationMember(row);
 }
 
 export interface CreateRefreshTokenInput {
@@ -75,31 +95,53 @@ export interface CreateRefreshTokenInput {
   expiresAt: Date;
 }
 
-export function createRefreshToken(input: CreateRefreshTokenInput) {
-  return prisma.refreshToken.create({ data: input });
+export async function createRefreshToken(input: CreateRefreshTokenInput): Promise<RefreshTokenRow> {
+  const row = unwrap<Row>(
+    await supabase
+      .from("refresh_tokens")
+      .insert({
+        userId: input.userId,
+        tokenHash: input.tokenHash,
+        expiresAt: input.expiresAt.toISOString(),
+      })
+      .select()
+      .single(),
+  );
+  return mapRefreshToken(row);
 }
 
-export function findRefreshTokenByHash(tokenHash: string) {
-  return prisma.refreshToken.findUnique({ where: { tokenHash } });
+export async function findRefreshTokenByHash(tokenHash: string): Promise<RefreshTokenRow | null> {
+  const row = unwrap<Row | null>(
+    await supabase.from("refresh_tokens").select("*").eq("tokenHash", tokenHash).maybeSingle(),
+  );
+  return row && mapRefreshToken(row);
 }
 
-export function rotateRefreshToken(id: string, replacedByTokenHash: string) {
-  return prisma.refreshToken.update({
-    where: { id },
-    data: { revokedAt: new Date(), replacedByTokenHash },
-  });
+export async function rotateRefreshToken(id: string, replacedByTokenHash: string): Promise<void> {
+  unwrapVoid(
+    await supabase
+      .from("refresh_tokens")
+      .update({ revokedAt: new Date().toISOString(), replacedByTokenHash })
+      .eq("id", id),
+  );
 }
 
-export function revokeRefreshTokenByHash(tokenHash: string) {
-  return prisma.refreshToken.updateMany({
-    where: { tokenHash, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
+export async function revokeRefreshTokenByHash(tokenHash: string): Promise<void> {
+  unwrapVoid(
+    await supabase
+      .from("refresh_tokens")
+      .update({ revokedAt: new Date().toISOString() })
+      .eq("tokenHash", tokenHash)
+      .is("revokedAt", null),
+  );
 }
 
-export function revokeAllUserRefreshTokens(userId: string) {
-  return prisma.refreshToken.updateMany({
-    where: { userId, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
+export async function revokeAllUserRefreshTokens(userId: string): Promise<void> {
+  unwrapVoid(
+    await supabase
+      .from("refresh_tokens")
+      .update({ revokedAt: new Date().toISOString() })
+      .eq("userId", userId)
+      .is("revokedAt", null),
+  );
 }

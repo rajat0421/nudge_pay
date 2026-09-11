@@ -16,7 +16,7 @@ modules/<name>/
   <name>.routes.ts       Fastify route registration + OpenAPI schema
   <name>.controller.ts   HTTP handlers — parse request, call service, shape response
   <name>.service.ts       Business logic, authorization-relevant decisions
-  <name>.repository.ts    All Prisma queries for this module, always org-scoped
+  <name>.repository.ts    All Supabase queries for this module, always org-scoped
   <name>.schemas.ts        Zod request schemas (source of truth for validation + docs)
   <name>.types.ts          Shared TS types
 ```
@@ -27,28 +27,50 @@ src/
   server.ts           API process entrypoint
   worker.ts           Standalone reminder-worker process entrypoint (optional, see below)
   config/             env validation (zod), constants, logger
-  db/prisma.ts        Prisma client singleton
+  db/
+    supabase.ts       The one @supabase/supabase-js client; unwrap()/error mapping
+    mappers.ts         Row shapes + Date hydration for every table
   middleware/         auth guard, centralized error handler, rate limiting, request IDs
   modules/            auth, users, organizations, clients, invoices, reminders,
                       email, dashboard, audit, health
   jobs/               reminder-scheduler (status sweep), reminder-worker (send),
                       retry-worker (backoff), runner (ties them together on an interval)
   utils/              dates (timezone-safe), money (integer minor units), crypto, pagination
-prisma/
-  schema.prisma
-  seed.ts
+supabase/
+  migrations/         Plain SQL — schema + RPC functions (see below)
+scripts/
+  migrate.ts          Applies supabase/migrations/*.sql (the only place DIRECT_URL is used)
+  seed.ts             Loads demo data
+  clean.ts            Wipes all data
 tests/
+```
+
+The app's only database access, at runtime, is `@supabase/supabase-js`
+talking to Supabase over HTTPS — there is no ORM and no direct Postgres
+connection in the running process.
+
+```
+Fastify
+   ↓
+@supabase/supabase-js
+   ↓
+Supabase PostgreSQL
 ```
 
 ### Multi-tenancy
 
-Every tenant-owned row (`Client`, `Invoice`, `ReminderSequence`, `ReminderStep`
-indirectly via its sequence, `EmailTemplate`, `ReminderEvent`, `AuditLog`)
-carries `organizationId`. **Every repository query filters by it.** A record
-is looked up with `findFirst({ where: { id, organizationId } })`, never a bare
-`findUnique({ where: { id } })` — so a user who knows another org's UUID gets
-a 404, not a 403 (never confirms the record even exists). This is exercised
-directly in `tests/tenancy.test.ts`.
+Every tenant-owned table (`clients`, `invoices`, `reminder_sequences`,
+`reminder_steps` indirectly via its sequence, `email_templates`,
+`reminder_events`, `audit_logs`) carries `organizationId`. **Every repository
+query filters by it.** A record is looked up with
+`.eq("id", id).eq("organizationId", organizationId).maybeSingle()`, never a
+bare id lookup — so a user who knows another org's UUID gets a 404, not a
+403 (never confirms the record even exists). This is exercised directly in
+`tests/tenancy.test.ts`.
+
+The service-role key (used by the one Supabase client in `src/db/supabase.ts`)
+bypasses Row Level Security entirely — tenant isolation is enforced in the
+application layer, not the database. That key must never reach the frontend.
 
 A user's "active" organization for a given request is embedded directly in
 their JWT access token at login/register time (`organizationId`, `role`).
@@ -60,18 +82,24 @@ adding an org switcher / invite flow later doesn't require a schema change.
 ### The reminder engine (no Redis required)
 
 1. An invoice is created with a `reminderSequenceId` (or one is attached
-   later) → `ReminderEvent` rows are inserted, one per step, `status: PENDING`,
-   `scheduledAt` computed from the due date + the step's `delayDays`, resolved
-   in **the organization's own timezone** (`utils/dates.ts`).
+   later) → `reminder_events` rows are inserted, one per step, `status:
+   PENDING`, `scheduledAt` computed from the due date + the step's
+   `delayDays`, resolved in **the organization's own timezone**
+   (`utils/dates.ts`).
 2. Nothing is sent yet — `scheduledAt` is just a future timestamp.
 3. Every `CRON_INTERVAL_MINUTES`, `jobs/runner.ts` fires a tick that:
    - recovers any event stuck in `PROCESSING` (a worker crashed mid-send),
    - re-derives `SENT → DUE → OVERDUE` invoice statuses in each org's timezone,
    - runs the reminder worker.
-4. The worker claims due events with `SELECT ... FOR UPDATE SKIP LOCKED`
-   inside a transaction (`reminders.repository.claimDueEvents`) — this is the
-   entire concurrency story. Two overlapping ticks (or two worker processes)
-   can never claim the same row; no queue/broker needed.
+4. The worker claims due events via the `claim_due_reminder_events` Postgres
+   function (`supabase/migrations/0001_init.sql`), which runs
+   `SELECT ... FOR UPDATE SKIP LOCKED` inside the function's own implicit
+   transaction — this is the entire concurrency story. Two overlapping ticks
+   (or two worker processes) can never claim the same row; no queue/broker
+   needed. PostgREST (what supabase-js talks to) has no client-side
+   transaction API, so this — and every other place that needs multi-
+   statement atomicity (registration, reminder-sequence creation, step
+   updates) — is a Postgres function (RPC) instead.
 5. For each claimed event, the invoice's *current* state is re-checked (paid?
    cancelled? paused?) right before sending — the claim lock only protects
    the event row, not the invoice row, so this is the actual enforcement of
@@ -80,9 +108,9 @@ adding an org switcher / invite flow later doesn't require a schema change.
    On failure: attempts++, exponential backoff (5m → 30m → 2h, configurable
    via `MAX_EMAIL_RETRIES`) via `jobs/retry-worker.ts`, or `FAILED` once
    retries are exhausted.
-7. A `@@unique([invoiceId, reminderStepId])` constraint on `ReminderEvent` is
-   the hard backstop against ever sending the same reminder twice, even under
-   a bug in the application layer.
+7. A `unique ("invoiceId", "reminderStepId")` constraint on `reminder_events`
+   is the hard backstop against ever sending the same reminder twice, even
+   under a bug in the application layer.
 
 Run the jobs in the same process as the API (default, simplest — fine at V1
 scale) or as a separate `npm run worker:start` process/service once you want
@@ -95,11 +123,15 @@ on the API service if you do, so the two don't double-process the same queue.
   the only place major/minor conversion happens, at the API edge. Never a
   float touches persistence or arithmetic.
 - `issueDate`/`dueDate` are calendar dates (no time component) stored as
-  UTC-midnight `DateTime`s. Reminder scheduling resolves "N days after the
+  UTC-midnight timestamps. Reminder scheduling resolves "N days after the
   due date" to an actual instant using the **organization's** timezone
   (`utils/dates.ts`), not the server's — a due date of "Sep 4" means the same
   calendar day everywhere the org operates from, regardless of where the
   container happens to run.
+- Supabase (PostgREST) returns timestamp columns as ISO strings, not JS
+  `Date` objects — `src/db/mappers.ts` converts each table's own date
+  columns back into `Date`s at the repository boundary, so the rest of the
+  codebase (`.getTime()`, date-fns, etc.) never has to think about it.
 
 ## Requirements
 
@@ -111,31 +143,31 @@ on the API service if you do, so the two don't double-process the same queue.
 ## Supabase setup
 
 1. Create a Supabase project (free tier is fine to start).
-2. Project Settings → Database → Connection string. Copy **both**:
-   - the pooled "Transaction" connection string (port `6543`) → `DATABASE_URL`
-   - the direct connection string (port `5432`) → `DIRECT_URL`
-
-   Prisma Migrate needs the direct connection — pgbouncer's transaction
-   pooling mode (what the pooled URL runs in) can't execute schema
-   migrations. The running app uses the pooled URL for everything else,
-   since Fastify and the reminder worker open many short-lived connections,
-   which is exactly what the pooler exists for.
-3. `cp .env.example .env` and fill in both URLs, plus real
+2. Project Settings → API → copy the **Project URL** and the
+   **`service_role` secret key** → `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`.
+   This key bypasses Row Level Security — keep it backend-only, never send it
+   to the frontend.
+3. Project Settings → Database → Connection string → copy the **direct**
+   connection (port `5432`, no pgbouncer) → `DIRECT_URL`. This is used only
+   by `npm run db:migrate` to apply schema/RPC changes — PostgREST (what the
+   running app talks to) can't execute DDL, so migrations need a real
+   Postgres connection; the app itself never reads this variable.
+4. `cp .env.example .env` and fill in all three, plus real
    `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (`openssl rand -hex 32`).
 
 ```bash
 npm install
-npm run db:generate    # generate the Prisma client
-npm run db:migrate     # applies schema migrations against Supabase (uses DIRECT_URL)
+npm run db:migrate     # applies supabase/migrations/*.sql (uses DIRECT_URL)
 npm run db:seed        # loads a demo organization + invoices
 npm run dev            # starts the API on http://localhost:4000
 ```
 
 Swagger UI: `http://localhost:4000/docs`. Health check: `GET /health` (also
-verifies the Supabase connection). Inspect data directly with:
+verifies the Supabase connection). Inspect data directly in the Supabase
+dashboard's Table Editor, or:
 
 ```bash
-npx prisma studio
+npm run db:clean   # wipes every table — destructive, no confirmation prompt
 ```
 
 Seeded login: `owner@example.com` / `password123` (organization "Acme Digital
@@ -148,8 +180,8 @@ See `.env.example` for the full list with comments. The important ones:
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Supabase's **pooled** connection string (port 6543) — used by the running app |
-| `DIRECT_URL` | Supabase's **direct** connection string (port 5432) — used only by `prisma migrate`/`prisma db seed` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | What the running app actually uses to reach the database |
+| `DIRECT_URL` | Direct (non-pooled) Postgres connection — used only by `npm run db:migrate`, never by the app |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Must be different, long, random. Never reuse across environments. |
 | `ACCESS_TOKEN_EXPIRES_IN` / `REFRESH_TOKEN_EXPIRES_IN` | e.g. `15m`, `7d` |
 | `EMAIL_SERVICE_URL` / `EMAIL_SERVICE_API_KEY` | NudgePay's shared HTTP email endpoint (not Resend, no SMTP). Leave the key empty in dev — falls back to a console provider that logs emails instead of sending them |
@@ -165,18 +197,19 @@ failing confusingly later.
 
 ## Database & migrations
 
+Schema changes are plain SQL files in `supabase/migrations/`, applied in
+filename order by the small custom runner in `scripts/migrate.ts` (it just
+tracks what's already been applied in a `_migrations` table — no Supabase
+CLI, no Docker required).
+
 ```bash
-npm run db:generate       # regenerate the Prisma client after a schema change
-npm run db:migrate        # create + apply a migration in development (needs DIRECT_URL)
-npm run db:migrate:deploy # apply existing migrations only — use this one in CI/production
-npm run db:seed           # (re-)run prisma/seed.ts — safe to re-run, see prisma/seed.ts
-npm run db:reset          # drop, recreate, migrate, and seed — destructive, dev only
-npm run db:studio         # browse/edit data directly (npx prisma studio)
+npm run db:migrate   # apply any not-yet-applied migrations (needs DIRECT_URL)
+npm run db:seed      # (re-)load demo data — safe to re-run, see scripts/seed.ts
+npm run db:clean     # wipe every table — destructive, dev/test only
 ```
 
-**Never run `db:migrate` (`prisma migrate dev`) against production** — it can
-prompt interactively and is meant for local schema iteration only. Production
-and CI always use `db:migrate:deploy`.
+To add a schema change: add a new `supabase/migrations/000N_description.sql`
+file (never edit an already-applied one) and run `npm run db:migrate` again.
 
 ## Running
 
@@ -197,21 +230,21 @@ npm run test:watch
 ```
 
 Tests need their own database — **never point them at one with real data**,
-the suite truncates every table before each test file. The recommended
-option is a second, free Supabase project used only for tests, so nothing
-outside Supabase is ever required; use its direct (non-pooled) connection
-string as `DATABASE_URL` for tests (no separate `DIRECT_URL` needed there —
-tests don't run through pgbouncer):
+the suite truncates every table before each test file via the
+`truncate_all_tables()` RPC. The recommended option is a second, free
+Supabase project used only for tests:
 
 ```bash
 # .env.test (or export inline) — a second/throwaway Supabase project, not the one with real data
 NODE_ENV=test
-DATABASE_URL="<your test Supabase project's direct connection string>"
+SUPABASE_URL=<your test project's URL>
+SUPABASE_SERVICE_ROLE_KEY=<your test project's service-role key>
+DIRECT_URL=<your test project's direct connection string>
 JWT_ACCESS_SECRET=test-access-secret-please-change
 JWT_REFRESH_SECRET=test-refresh-secret-please-change
 
-npx prisma migrate deploy   # with the env above loaded
-npm test                    # with the env above loaded
+npm run db:migrate   # with the env above loaded
+npm test              # with the env above loaded
 ```
 
 Coverage: registration/login/refresh/invalid-credentials, cross-organization
@@ -252,26 +285,30 @@ Response envelope, applied consistently everywhere:
   replayed, already-rotated refresh token revokes the whole session chain).
 - The centralized error handler never leaks stack traces or raw driver
   errors in production — only `AppError` subclasses' intentional messages,
-  or a generic "unexpected error" for anything unrecognized.
+  or a generic "unexpected error" for anything unrecognized. Database errors
+  (unique/foreign-key violations) are mapped to the same safe `AppError`
+  shape in `src/db/supabase.ts`, right where they occur.
 - Structured logging (Pino) redacts `Authorization` headers, passwords, and
   tokens by path, everywhere, including inside the job runner.
+- The Supabase **service-role key bypasses Row Level Security** — this is a
+  deliberate tradeoff (tenant isolation is enforced in the application layer
+  instead, exactly as it would be with any ORM), not an oversight. That key
+  is backend-only and must never be shipped to a frontend or client.
 
 ## Production deployment considerations
 
 - **Database**: Supabase Postgres, in every environment — there is no local
-  or self-managed Postgres anywhere in this stack. Run `db:migrate:deploy`
-  (`prisma migrate deploy`) as a release step, never `db:migrate`
-  (`prisma migrate dev`), which is interactive and meant for local iteration
-  only. Point `DIRECT_URL` at Supabase's direct connection for the migration
-  step; the running app itself only ever needs the pooled `DATABASE_URL`.
+  or self-managed Postgres anywhere in this stack. Run `npm run db:migrate`
+  as a release step whenever `supabase/migrations/` has new files.
 - **Process model**: a single service running `npm start` covers the API and
   the reminder engine together at V1 scale. If reminder volume grows enough
   to want independent scaling/restarts, deploy `npm run worker:start` as a
   second service and set `RUN_JOBS_IN_API_PROCESS=false` on the API service.
-- **Secrets**: set `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`/`EMAIL_SERVICE_API_KEY`
-  via your platform's secret manager, never in a committed file. Rotate the
-  JWT secrets and every existing refresh token is invalidated at once —
-  acceptable for a security incident response, so keep that in mind.
+- **Secrets**: set `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET`/
+  `SUPABASE_SERVICE_ROLE_KEY`/`EMAIL_SERVICE_API_KEY` via your platform's
+  secret manager, never in a committed file. Rotate the JWT secrets and
+  every existing refresh token is invalidated at once — acceptable for a
+  security incident response, so keep that in mind.
 - **CORS**: set `CORS_ORIGIN` to your real frontend origin(s) (comma-
   separated for more than one) — the wildcard-friendly local default is not
   safe for production.
@@ -279,9 +316,9 @@ Response envelope, applied consistently everywhere:
   emails instead of sending them — intentional for a demo/staging
   environment, but double-check it's set before you expect real reminders to
   go out.
-- **Horizontal scaling**: the worker's `FOR UPDATE SKIP LOCKED` claim is safe
-  to run from multiple instances concurrently — no coordination needed beyond
-  Postgres itself.
+- **Horizontal scaling**: the worker's `FOR UPDATE SKIP LOCKED` claim (inside
+  the `claim_due_reminder_events` RPC) is safe to run from multiple instances
+  concurrently — no coordination needed beyond Postgres itself.
 
 ## V1 scope, deliberately
 

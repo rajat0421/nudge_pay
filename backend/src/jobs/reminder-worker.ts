@@ -1,4 +1,4 @@
-import { prisma } from "../db/prisma";
+import { supabase, unwrap } from "../db/supabase";
 import { logger } from "../config/logger";
 import { formatMinorUnits } from "../utils/money";
 import { formatCalendarDate } from "../utils/dates";
@@ -23,10 +23,9 @@ const DEFAULT_BATCH_SIZE = 20;
  * lock only protects the reminder_events row, not the invoice row, so a
  * payment/cancellation/pause that landed after claiming must still win. */
 async function isInvoiceStillEligible(invoiceId: string): Promise<boolean> {
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId },
-    select: { status: true, remindersPaused: true },
-  });
+  const invoice = unwrap<{ status: string; remindersPaused: boolean } | null>(
+    await supabase.from("invoices").select("status, remindersPaused").eq("id", invoiceId).maybeSingle(),
+  );
   if (!invoice) return false;
   if (invoice.status === "PAID" || invoice.status === "CANCELLED") return false;
   if (invoice.remindersPaused) return false;

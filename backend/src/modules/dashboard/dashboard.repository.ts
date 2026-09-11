@@ -1,69 +1,80 @@
-import { prisma } from "../../db/prisma";
+import { supabase, unwrap, type Row } from "../../db/supabase";
+import { mapInvoiceWithClient, mapReminderEventWithStep } from "../../db/mappers";
 
-function startOfCurrentMonthUtc(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+interface SummaryAggregates {
+  outstandingAmount: number;
+  overdueAmount: number;
+  paidThisMonth: number;
+  totalInvoices: number;
+  overdueCount: number;
 }
 
 export async function getSummaryAggregates(organizationId: string) {
-  const [outstandingAgg, overdueAgg, paidThisMonthAgg, totalInvoices, overdueCount, upcoming] =
-    await Promise.all([
-      prisma.invoice.aggregate({
-        where: { organizationId, status: { in: ["SENT", "DUE", "OVERDUE"] } },
-        _sum: { amount: true },
-      }),
-      prisma.invoice.aggregate({
-        where: { organizationId, status: "OVERDUE" },
-        _sum: { amount: true },
-      }),
-      prisma.invoice.aggregate({
-        where: { organizationId, status: "PAID", paidAt: { gte: startOfCurrentMonthUtc() } },
-        _sum: { amount: true },
-      }),
-      prisma.invoice.count({ where: { organizationId } }),
-      prisma.invoice.count({ where: { organizationId, status: "OVERDUE" } }),
-      prisma.invoice.findMany({
-        where: { organizationId, status: { in: ["SENT", "DUE"] } },
-        orderBy: { dueDate: "asc" },
-        take: 5,
-        include: { client: true },
-      }),
-    ]);
+  const aggregates = unwrap<SummaryAggregates>(
+    await supabase.rpc("get_dashboard_summary", { p_organization_id: organizationId }),
+  );
+
+  const upcomingRows = unwrap<Row[]>(
+    await supabase
+      .from("invoices")
+      .select("*, client:clients(*)")
+      .eq("organizationId", organizationId)
+      .in("status", ["SENT", "DUE"])
+      .order("dueDate", { ascending: true })
+      .limit(5),
+  );
 
   return {
-    outstandingAmount: outstandingAgg._sum.amount ?? 0,
-    overdueAmount: overdueAgg._sum.amount ?? 0,
-    paidThisMonth: paidThisMonthAgg._sum.amount ?? 0,
-    totalInvoices,
-    overdueCount,
-    upcoming,
+    ...aggregates,
+    upcoming: (upcomingRows ?? []).map(mapInvoiceWithClient),
   };
 }
 
-export function listOverdueInvoices(organizationId: string, opts: { skip: number; take: number }) {
-  return prisma.invoice.findMany({
-    where: { organizationId, status: "OVERDUE" },
-    orderBy: { dueDate: "asc" },
-    include: { client: true },
-    skip: opts.skip,
-    take: opts.take,
-  });
+export async function listOverdueInvoices(organizationId: string, opts: { skip: number; take: number }) {
+  const rows = unwrap<Row[]>(
+    await supabase
+      .from("invoices")
+      .select("*, client:clients(*)")
+      .eq("organizationId", organizationId)
+      .eq("status", "OVERDUE")
+      .order("dueDate", { ascending: true })
+      .range(opts.skip, opts.skip + opts.take - 1),
+  );
+  return (rows ?? []).map(mapInvoiceWithClient);
 }
 
-export function countOverdueInvoices(organizationId: string) {
-  return prisma.invoice.count({ where: { organizationId, status: "OVERDUE" } });
+export async function countOverdueInvoices(organizationId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("invoices")
+    .select("*", { count: "exact", head: true })
+    .eq("organizationId", organizationId)
+    .eq("status", "OVERDUE");
+  if (error) throw error;
+  return count ?? 0;
 }
 
-export function listRecentActivity(organizationId: string, opts: { skip: number; take: number }) {
-  return prisma.reminderEvent.findMany({
-    where: { organizationId, status: { in: ["SENT", "FAILED"] } },
-    orderBy: { updatedAt: "desc" },
-    include: { invoice: { include: { client: true } }, reminderStep: true },
-    skip: opts.skip,
-    take: opts.take,
-  });
+export async function listRecentActivity(organizationId: string, opts: { skip: number; take: number }) {
+  const rows = unwrap<Row[]>(
+    await supabase
+      .from("reminder_events")
+      .select("*, invoice:invoices(*, client:clients(*)), reminderStep:reminder_steps(*)")
+      .eq("organizationId", organizationId)
+      .in("status", ["SENT", "FAILED"])
+      .order("updatedAt", { ascending: false })
+      .range(opts.skip, opts.skip + opts.take - 1),
+  );
+  return (rows ?? []).map((row) => ({
+    ...mapReminderEventWithStep(row),
+    invoice: mapInvoiceWithClient(row.invoice as Row),
+  }));
 }
 
-export function countRecentActivity(organizationId: string) {
-  return prisma.reminderEvent.count({ where: { organizationId, status: { in: ["SENT", "FAILED"] } } });
+export async function countRecentActivity(organizationId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("reminder_events")
+    .select("*", { count: "exact", head: true })
+    .eq("organizationId", organizationId)
+    .in("status", ["SENT", "FAILED"]);
+  if (error) throw error;
+  return count ?? 0;
 }

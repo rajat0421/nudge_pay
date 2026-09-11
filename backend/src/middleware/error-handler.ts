@@ -1,5 +1,4 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import { AppError } from "../utils/errors";
 import { fail } from "../utils/response";
@@ -37,22 +36,6 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return reply
         .status(422)
         .send(fail("VALIDATION_ERROR", error.message, error.validation));
-    }
-
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === "P2002") {
-        return reply
-          .status(409)
-          .send(fail("CONFLICT", "A record with these values already exists"));
-      }
-      if (error.code === "P2025") {
-        return reply.status(404).send(fail("NOT_FOUND", "Resource not found"));
-      }
-      if (error.code === "P2003") {
-        return reply
-          .status(409)
-          .send(fail("CONFLICT", "This action conflicts with a related record"));
-      }
     }
 
     const statusCode = "statusCode" in error && typeof error.statusCode === "number"
