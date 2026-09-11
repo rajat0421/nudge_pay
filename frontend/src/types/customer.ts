@@ -1,11 +1,12 @@
-export interface Customer {
+/** Named `Client` to match the backend's terminology exactly — the UI still calls this "Customers". */
+export interface Client {
   id: string;
+  organizationId: string;
   name: string;
-  contactName: string;
+  companyName: string | null;
   email: string;
-  company: string;
-  outstanding: number;
-  avgDaysToPay: number;
-  invoiceCount: number;
+  phone: string | null;
+  notes: string | null;
   createdAt: string;
+  updatedAt: string;
 }

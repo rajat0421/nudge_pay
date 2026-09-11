@@ -26,7 +26,7 @@ const nav = [
 
 export function Sidebar() {
   const { sidebarOpen, setSidebarOpen } = useAppStore();
-  const plan = useAuthStore((s) => s.user?.plan);
+  const user = useAuthStore((s) => s.user);
 
   return (
     <>
@@ -77,20 +77,20 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="rounded-xl border border-sidebar-border p-3.5">
-          <p className="text-xs font-medium text-sidebar-primary capitalize">
-            {plan ?? "Trial"} plan
-          </p>
-          <p className="mt-1 text-xs text-sidebar-foreground/60">
-            Unlimited reminders while you validate with pilot clients.
-          </p>
-          <Link
-            to="/settings"
-            className="mt-3 inline-flex text-xs font-semibold text-sidebar-foreground underline decoration-sidebar-primary decoration-2 underline-offset-4"
-          >
-            Manage plan
-          </Link>
-        </div>
+        {user && (
+          <div className="rounded-xl border border-sidebar-border p-3.5">
+            <p className="truncate text-xs font-medium text-sidebar-primary">
+              {user.organization}
+            </p>
+            <p className="mt-1 truncate text-xs text-sidebar-foreground/60">{user.email}</p>
+            <Link
+              to="/settings"
+              className="mt-3 inline-flex text-xs font-semibold text-sidebar-foreground underline decoration-sidebar-primary decoration-2 underline-offset-4"
+            >
+              Organization settings
+            </Link>
+          </div>
+        )}
       </aside>
     </>
   );

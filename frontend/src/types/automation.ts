@@ -1,18 +1,26 @@
-export interface AutomationStep {
+export interface EmailTemplate {
   id: string;
-  offsetDays: number;
-  channel: "email";
+  name: string;
   subject: string;
   body: string;
 }
 
-export interface Automation {
+export interface ReminderStep {
   id: string;
+  stepOrder: number;
+  delayDays: number;
+  emailTemplateId: string;
+  emailTemplate: EmailTemplate;
+}
+
+/** Named `ReminderSequence` to match the backend — the UI still calls this "Automations". */
+export interface ReminderSequence {
+  id: string;
+  organizationId: string;
   name: string;
-  description: string;
-  active: boolean;
-  trigger: "due_date" | "issue_date";
-  steps: AutomationStep[];
-  invoicesAttached: number;
-  recoveredAmount: number;
+  description: string | null;
+  isActive: boolean;
+  steps: ReminderStep[];
+  createdAt: string;
+  updatedAt: string;
 }

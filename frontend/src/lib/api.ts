@@ -1,7 +1,7 @@
 import { useAuthStore } from "@/store/authStore";
 
 const API_BASE_URL: string =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:4000/api/v1";
+  (import.meta.env["VITE_API_URL"] as string | undefined) ?? "http://localhost:4000/api/v1";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -65,13 +65,13 @@ async function request<T>(path: string, options: RequestOptions = {}, isRetry = 
 
   if (auth) {
     const accessToken = useAuthStore.getState().accessToken;
-    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 
   if (response.status === 401 && auth && !isRetry) {

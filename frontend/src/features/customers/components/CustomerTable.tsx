@@ -6,20 +6,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/format";
-import type { Customer } from "@/types/customer";
+import type { Client } from "@/types/customer";
 
-export function CustomerTable({ customers }: { customers: Customer[] }) {
+export function CustomerTable({ customers }: { customers: Client[] }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Client</TableHead>
-            <TableHead>Contact</TableHead>
-            <TableHead className="text-right">Outstanding</TableHead>
-            <TableHead className="text-right">Avg. days to pay</TableHead>
-            <TableHead className="text-right">Invoices</TableHead>
+            <TableHead>Company</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Phone</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -27,18 +25,10 @@ export function CustomerTable({ customers }: { customers: Customer[] }) {
             <TableRow key={customer.id}>
               <TableCell className="font-medium">{customer.name}</TableCell>
               <TableCell className="text-muted-foreground">
-                <span className="block">{customer.contactName}</span>
-                <span className="block text-xs">{customer.email}</span>
+                {customer.companyName ?? "—"}
               </TableCell>
-              <TableCell className="nums text-right font-medium">
-                {customer.outstanding > 0 ? formatCurrency(customer.outstanding) : "—"}
-              </TableCell>
-              <TableCell className="nums text-right text-muted-foreground">
-                {customer.avgDaysToPay}d
-              </TableCell>
-              <TableCell className="nums text-right text-muted-foreground">
-                {customer.invoiceCount}
-              </TableCell>
+              <TableCell className="text-muted-foreground">{customer.email}</TableCell>
+              <TableCell className="text-muted-foreground">{customer.phone ?? "—"}</TableCell>
             </TableRow>
           ))}
         </TableBody>

@@ -1,12 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
-import { Clock, TrendingUp, Wallet } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, CheckCircle2, FileText, Wallet } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageContainer, PageHeading } from "@/components/layout/PageContainer";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { EmptyState } from "@/components/common/EmptyState";
+import { ErrorState } from "@/components/common/ErrorState";
+import { LoadingState } from "@/components/common/LoadingState";
 import { KpiCard } from "@/features/dashboard/components/KpiCard";
+import { getDashboardSummary } from "@/features/dashboard/services/dashboard.service";
 import { formatCurrency } from "@/lib/format";
-import { automations, customers, monthlyStats } from "@/lib/mock-db";
 
 export const Route = createFileRoute("/analytics")({
   head: () => ({
@@ -14,69 +16,66 @@ export const Route = createFileRoute("/analytics")({
       { title: "Analytics — NudgePay" },
       {
         name: "description",
-        content: "Outstanding vs. collected trends and how much automated reminders have recovered.",
+        content: "Outstanding, overdue and collected totals across every invoice.",
       },
       { property: "og:title", content: "Analytics — NudgePay" },
-      { property: "og:description", content: "Collections trend and reminder recovery totals." },
+      { property: "og:description", content: "Outstanding, overdue and collected totals." },
     ],
   }),
   component: AnalyticsPage,
 });
 
-const chartConfig = {
-  outstanding: { label: "Outstanding", color: "var(--chart-4)" },
-  collected: { label: "Collected", color: "var(--chart-1)" },
-} satisfies ChartConfig;
-
 function AnalyticsPage() {
-  const recovered = automations.reduce((sum, a) => sum + a.recoveredAmount, 0);
-  const avgDaysToPay =
-    customers.length === 0
-      ? 0
-      : Math.round(customers.reduce((sum, c) => sum + c.avgDaysToPay, 0) / customers.length);
-  const collectedThisMonth = monthlyStats.at(-1)?.collected ?? 0;
+  const summaryQuery = useQuery({
+    queryKey: ["dashboard", "summary"],
+    queryFn: getDashboardSummary,
+  });
 
   return (
     <AppLayout title="Analytics">
       <PageContainer>
         <PageHeading
           title="Analytics"
-          description="How collections are trending and what automated reminders have recovered."
+          description="Outstanding, overdue and collected totals across every invoice."
         />
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <KpiCard
-            label="Recovered by automations"
-            value={formatCurrency(recovered)}
-            delta="Since automations were turned on"
-            tone="positive"
-            icon={TrendingUp}
-          />
-          <KpiCard
-            label="Collected this month"
-            value={formatCurrency(collectedThisMonth)}
-            delta={`Across ${monthlyStats.length} months tracked`}
-            icon={Wallet}
-          />
-          <KpiCard
-            label="Avg. days to pay"
-            value={`${avgDaysToPay}d`}
-            delta="Averaged across all clients"
-            icon={Clock}
-          />
-        </div>
+        {summaryQuery.isLoading ? (
+          <LoadingState rows={1} />
+        ) : summaryQuery.isError ? (
+          <ErrorState onRetry={() => summaryQuery.refetch()} />
+        ) : summaryQuery.data ? (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard
+              label="Outstanding"
+              value={formatCurrency(summaryQuery.data.outstandingAmount)}
+              icon={Wallet}
+            />
+            <KpiCard
+              label="Overdue"
+              value={formatCurrency(summaryQuery.data.overdueAmount)}
+              delta={`${summaryQuery.data.overdueCount} invoices past due`}
+              tone={summaryQuery.data.overdueCount > 0 ? "negative" : "neutral"}
+              icon={AlertCircle}
+            />
+            <KpiCard
+              label="Paid this month"
+              value={formatCurrency(summaryQuery.data.paidThisMonth)}
+              tone="positive"
+              icon={CheckCircle2}
+            />
+            <KpiCard
+              label="Total invoices"
+              value={String(summaryQuery.data.totalInvoices)}
+              icon={FileText}
+            />
+          </div>
+        ) : null}
 
-        <div className="mt-6 rounded-xl border border-border bg-card p-5">
-          <h3 className="mb-4 text-base font-semibold">Outstanding vs. collected</h3>
-          <ChartContainer config={chartConfig} className="aspect-auto h-72 w-full">
-            <BarChart data={monthlyStats}>
-              <CartesianGrid vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="outstanding" fill="var(--color-outstanding)" radius={4} />
-              <Bar dataKey="collected" fill="var(--color-collected)" radius={4} />
-            </BarChart>
-          </ChartContainer>
+        <div className="mt-6">
+          <EmptyState
+            title="Trend charts coming soon"
+            description="Historical collection trends and reminder-recovery totals aren't available from the backend yet — this page shows only real, current totals."
+          />
         </div>
       </PageContainer>
     </AppLayout>

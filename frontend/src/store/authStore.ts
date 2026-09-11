@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { api } from "@/lib/api-client";
+import { api } from "@/lib/api";
 import type { User } from "@/types/user";
 
 export interface RegisterInput {
@@ -43,10 +43,7 @@ function toFrontendUser(backendUser: BackendUser, organization: BackendOrganizat
     name,
     email: backendUser.email,
     organization: organization.name,
-    plan: "trialing",
     timezone: organization.timezone,
-    senderName: name,
-    senderEmail: backendUser.email,
   };
 }
 

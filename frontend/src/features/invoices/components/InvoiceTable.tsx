@@ -22,7 +22,6 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
             <TableHead className="text-right">Amount</TableHead>
             <TableHead>Due</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="text-right">Reminders</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -34,10 +33,12 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
                   params={{ invoiceId: invoice.id }}
                   className="hover:text-primary hover:underline"
                 >
-                  {invoice.number}
+                  {invoice.invoiceNumber}
                 </Link>
               </TableCell>
-              <TableCell className="text-muted-foreground">{invoice.customerName}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {invoice.client?.name ?? "—"}
+              </TableCell>
               <TableCell className="nums text-right font-medium">
                 {formatCurrency(invoice.amount, invoice.currency)}
               </TableCell>
@@ -46,10 +47,6 @@ export function InvoiceTable({ invoices }: { invoices: Invoice[] }) {
               </TableCell>
               <TableCell>
                 <StatusBadge status={invoice.status} />
-              </TableCell>
-              <TableCell className="nums text-right text-muted-foreground">
-                {invoice.reminders.filter((r) => r.state === "sent").length}/
-                {invoice.reminders.length}
               </TableCell>
             </TableRow>
           ))}

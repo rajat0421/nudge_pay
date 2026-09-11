@@ -1,34 +1,76 @@
-import type { Invoice, InvoiceStatus } from "@/types/invoice";
+import { api, type PaginatedResponse } from "@/lib/api";
+import type { Invoice, InvoiceDetail, InvoiceStatus } from "@/types/invoice";
 
-export function filterInvoices(
-  invoices: Invoice[],
-  { status, query }: { status: InvoiceStatus | "all"; query: string },
-) {
-  const q = query.trim().toLowerCase();
-  return invoices.filter((invoice) => {
-    const statusOk = status === "all" ? true : invoice.status === status;
-    const queryOk =
-      q.length === 0 ||
-      invoice.number.toLowerCase().includes(q) ||
-      invoice.customerName.toLowerCase().includes(q);
-    return statusOk && queryOk;
-  });
+export interface ListInvoicesParams {
+  page?: number | undefined;
+  limit?: number | undefined;
+  status?: InvoiceStatus | undefined;
+  clientId?: string | undefined;
+  search?: string | undefined;
+  sortBy?: "dueDate" | "createdAt" | "amount" | "invoiceNumber" | undefined;
+  sortOrder?: "asc" | "desc" | undefined;
 }
 
-export function summarize(invoices: Invoice[]) {
-  const sum = (list: Invoice[]) => list.reduce((total, i) => total + i.amount, 0);
-  const outstanding = invoices.filter((i) => i.status === "sent" || i.status === "overdue");
-  const overdue = invoices.filter((i) => i.status === "overdue");
-  const paid = invoices.filter((i) => i.status === "paid");
-  const reminders = invoices.flatMap((i) => i.reminders);
+function toQueryString(params: object): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params) as Array<[string, unknown]>) {
+    if (value !== undefined && value !== "") query.set(key, String(value));
+  }
+  const qs = query.toString();
+  return qs ? `?${qs}` : "";
+}
 
-  return {
-    outstanding: sum(outstanding),
-    outstandingCount: outstanding.length,
-    overdue: sum(overdue),
-    paid: sum(paid),
-    overdueCount: overdue.length,
-    remindersSent: reminders.filter((r) => r.state === "sent").length,
-    remindersFailed: reminders.filter((r) => r.state === "failed").length,
-  };
+export function listInvoices(params: ListInvoicesParams = {}): Promise<PaginatedResponse<Invoice>> {
+  return api.get<PaginatedResponse<Invoice>>(`/invoices${toQueryString(params)}`);
+}
+
+export function getInvoice(id: string): Promise<InvoiceDetail> {
+  return api.get<InvoiceDetail>(`/invoices/${id}`);
+}
+
+export interface CreateInvoiceInput {
+  clientId: string;
+  invoiceNumber: string;
+  amount: number;
+  currency: string;
+  issueDate: string;
+  dueDate: string;
+  paymentUrl?: string | undefined;
+  reminderSequenceId?: string | undefined;
+}
+
+export function createInvoice(input: CreateInvoiceInput): Promise<Invoice> {
+  return api.post<Invoice>("/invoices", input);
+}
+
+export interface UpdateInvoiceInput {
+  clientId?: string;
+  invoiceNumber?: string;
+  amount?: number;
+  currency?: string;
+  issueDate?: string;
+  dueDate?: string;
+  paymentUrl?: string;
+  reminderSequenceId?: string | null;
+  status?: "CANCELLED";
+}
+
+export function updateInvoice(id: string, input: UpdateInvoiceInput): Promise<InvoiceDetail> {
+  return api.patch<InvoiceDetail>(`/invoices/${id}`, input);
+}
+
+export function deleteInvoice(id: string): Promise<void> {
+  return api.del<void>(`/invoices/${id}`);
+}
+
+export function markInvoicePaid(id: string): Promise<InvoiceDetail> {
+  return api.post<InvoiceDetail>(`/invoices/${id}/mark-paid`);
+}
+
+export function pauseInvoiceReminders(id: string): Promise<InvoiceDetail> {
+  return api.post<InvoiceDetail>(`/invoices/${id}/pause-reminders`);
+}
+
+export function resumeInvoiceReminders(id: string): Promise<InvoiceDetail> {
+  return api.post<InvoiceDetail>(`/invoices/${id}/resume-reminders`);
 }

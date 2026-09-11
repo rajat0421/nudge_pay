@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -12,63 +14,90 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency } from "@/lib/format";
-import { useAutomationStore } from "@/store/automationStore";
-import type { Automation, AutomationStep } from "@/types/automation";
+import { ApiError } from "@/lib/api";
+import {
+  updateSequence,
+  updateSequenceStep,
+} from "@/features/automations/services/reminder-sequence.service";
+import type { ReminderSequence, ReminderStep } from "@/types/automation";
 
-export function AutomationCard({ automation }: { automation: Automation }) {
-  const toggleActive = useAutomationStore((s) => s.toggleActive);
-  const [editingStep, setEditingStep] = useState<AutomationStep | null>(null);
+export function AutomationCard({ automation }: { automation: ReminderSequence }) {
+  const queryClient = useQueryClient();
+  const [editingStep, setEditingStep] = useState<ReminderStep | null>(null);
+
+  const toggleMutation = useMutation({
+    mutationFn: (isActive: boolean) => updateSequence(automation.id, { isActive }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["reminder-sequences"] });
+    },
+    onError: (error) => {
+      toast.error(error instanceof ApiError ? error.message : "Could not update sequence");
+    },
+  });
 
   return (
     <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-display text-base font-semibold">{automation.name}</h3>
-          <p className="mt-1 max-w-xl text-sm text-muted-foreground">{automation.description}</p>
+          {automation.description && (
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+              {automation.description}
+            </p>
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">{automation.active ? "Active" : "Paused"}</span>
+          <span className="text-muted-foreground">
+            {automation.isActive ? "Active" : "Paused"}
+          </span>
           <Switch
-            checked={automation.active}
-            onCheckedChange={() => toggleActive(automation.id)}
+            checked={automation.isActive}
+            onCheckedChange={(checked) => toggleMutation.mutate(checked)}
+            disabled={toggleMutation.isPending}
           />
         </label>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-6 border-y border-border py-3 text-sm">
-        <Stat label="Trigger" value={automation.trigger === "due_date" ? "Due date" : "Issue date"} />
-        <Stat label="Invoices attached" value={String(automation.invoicesAttached)} />
-        <Stat label="Recovered" value={formatCurrency(automation.recoveredAmount)} />
+        <Stat label="Steps" value={String(automation.steps.length)} />
       </div>
 
-      <ol className="mt-4 space-y-3">
-        {automation.steps.map((step) => (
-          <li
-            key={step.id}
-            className="flex items-start justify-between gap-3 rounded-lg bg-secondary/60 p-3"
-          >
-            <div>
-              <p className="text-sm font-medium">
-                +{step.offsetDays} days · {step.subject}
-              </p>
-              <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{step.body}</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0"
-              aria-label="Edit step"
-              onClick={() => setEditingStep(step)}
-            >
-              <Pencil className="size-4" />
-            </Button>
-          </li>
-        ))}
-      </ol>
+      {automation.steps.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">No steps configured yet.</p>
+      ) : (
+        <ol className="mt-4 space-y-3">
+          {automation.steps
+            .slice()
+            .sort((a, b) => a.stepOrder - b.stepOrder)
+            .map((step) => (
+              <li
+                key={step.id}
+                className="flex items-start justify-between gap-3 rounded-lg bg-secondary/60 p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    +{step.delayDays} days · {step.emailTemplate.subject}
+                  </p>
+                  <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                    {step.emailTemplate.body}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label="Edit step"
+                  onClick={() => setEditingStep(step)}
+                >
+                  <Pencil className="size-4" />
+                </Button>
+              </li>
+            ))}
+        </ol>
+      )}
 
       <StepEditDialog
-        automationId={automation.id}
+        sequenceId={automation.id}
         step={editingStep}
         onClose={() => setEditingStep(null)}
       />
@@ -86,15 +115,28 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function StepEditDialog({
-  automationId,
+  sequenceId,
   step,
   onClose,
 }: {
-  automationId: string;
-  step: AutomationStep | null;
+  sequenceId: string;
+  step: ReminderStep | null;
   onClose: () => void;
 }) {
-  const updateStep = useAutomationStore((s) => s.updateStep);
+  const queryClient = useQueryClient();
+
+  const updateMutation = useMutation({
+    mutationFn: (input: { delayDays: number; subject: string; body: string }) =>
+      updateSequenceStep(sequenceId, step!.id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["reminder-sequences"] });
+      toast.success("Step updated");
+      onClose();
+    },
+    onError: (error) => {
+      toast.error(error instanceof ApiError ? error.message : "Could not update step");
+    },
+  });
 
   return (
     <Dialog
@@ -107,11 +149,9 @@ function StepEditDialog({
         <StepEditForm
           key={step.id}
           initial={step}
+          isSaving={updateMutation.isPending}
           onCancel={onClose}
-          onSave={(patch) => {
-            updateStep(automationId, step.id, patch);
-            onClose();
-          }}
+          onSave={(patch) => updateMutation.mutate(patch)}
         />
       )}
     </Dialog>
@@ -120,16 +160,18 @@ function StepEditDialog({
 
 function StepEditForm({
   initial,
+  isSaving,
   onSave,
   onCancel,
 }: {
-  initial: AutomationStep;
-  onSave: (patch: Partial<AutomationStep>) => void;
+  initial: ReminderStep;
+  isSaving: boolean;
+  onSave: (patch: { delayDays: number; subject: string; body: string }) => void;
   onCancel: () => void;
 }) {
-  const [offsetDays, setOffsetDays] = useState(initial.offsetDays);
-  const [subject, setSubject] = useState(initial.subject);
-  const [body, setBody] = useState(initial.body);
+  const [delayDays, setDelayDays] = useState(initial.delayDays);
+  const [subject, setSubject] = useState(initial.emailTemplate.subject);
+  const [body, setBody] = useState(initial.emailTemplate.body);
 
   return (
     <DialogContent className="max-w-lg">
@@ -139,12 +181,12 @@ function StepEditForm({
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="offsetDays">Days after due date</Label>
+          <Label htmlFor="delayDays">Days after due date</Label>
           <Input
-            id="offsetDays"
+            id="delayDays"
             type="number"
-            value={offsetDays}
-            onChange={(e) => setOffsetDays(Number(e.target.value))}
+            value={delayDays}
+            onChange={(e) => setDelayDays(Number(e.target.value))}
           />
         </div>
         <div className="space-y-2">
@@ -167,7 +209,9 @@ function StepEditForm({
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={() => onSave({ offsetDays, subject, body })}>Save step</Button>
+        <Button onClick={() => onSave({ delayDays, subject, body })} disabled={isSaving}>
+          Save step
+        </Button>
       </DialogFooter>
     </DialogContent>
   );

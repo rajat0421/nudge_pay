@@ -1,9 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageContainer, PageHeading } from "@/components/layout/PageContainer";
 import { EmptyState } from "@/components/common/EmptyState";
+import { ErrorState } from "@/components/common/ErrorState";
+import { LoadingState } from "@/components/common/LoadingState";
+import { Button } from "@/components/ui/button";
 import { AutomationCard } from "@/features/automations/components/AutomationCard";
-import { useAutomationStore } from "@/store/automationStore";
+import { SequenceFormDialog } from "@/features/automations/components/SequenceFormDialog";
+import { listSequences } from "@/features/automations/services/reminder-sequence.service";
 
 export const Route = createFileRoute("/automations")({
   head: () => ({
@@ -11,12 +17,13 @@ export const Route = createFileRoute("/automations")({
       { title: "Automations — NudgePay" },
       {
         name: "description",
-        content: "Reminder sequences that chase overdue invoices automatically — edit steps or pause them per client type.",
+        content:
+          "Reminder sequences that chase overdue invoices automatically — edit steps or pause them per client type.",
       },
       { property: "og:title", content: "Automations — NudgePay" },
       {
         property: "og:description",
-        content: "Every automated reminder sequence and how much it has recovered.",
+        content: "Every automated reminder sequence and its steps.",
       },
     ],
   }),
@@ -24,7 +31,21 @@ export const Route = createFileRoute("/automations")({
 });
 
 function AutomationsPage() {
-  const automations = useAutomationStore((s) => s.automations);
+  const sequencesQuery = useQuery({
+    queryKey: ["reminder-sequences"],
+    queryFn: listSequences,
+  });
+
+  const createButton = (
+    <SequenceFormDialog
+      trigger={
+        <Button>
+          <Plus className="size-4" />
+          New sequence
+        </Button>
+      }
+    />
+  );
 
   return (
     <AppLayout title="Automations">
@@ -32,16 +53,22 @@ function AutomationsPage() {
         <PageHeading
           title="Automations"
           description="Reminder sequences run automatically once an invoice is attached — no manual follow-up needed."
+          actions={createButton}
         />
 
-        {automations.length === 0 ? (
+        {sequencesQuery.isLoading ? (
+          <LoadingState rows={3} />
+        ) : sequencesQuery.isError ? (
+          <ErrorState onRetry={() => sequencesQuery.refetch()} />
+        ) : !sequencesQuery.data || sequencesQuery.data.length === 0 ? (
           <EmptyState
             title="No automations yet"
             description="Create a reminder sequence to start chasing overdue invoices automatically."
+            action={createButton}
           />
         ) : (
           <div className="space-y-4">
-            {automations.map((automation) => (
+            {sequencesQuery.data.map((automation) => (
               <AutomationCard key={automation.id} automation={automation} />
             ))}
           </div>
